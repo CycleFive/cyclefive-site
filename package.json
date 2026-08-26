@@ -1,0 +1,14 @@
+{
+  "name": "cyclefive-site",
+  "version": "1.0.0",
+  "description": "cyclefive.xyz — Zola static site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "zola build && serve-the-source --content content --out public --base cyclefive.xyz",
+    "serve": "zola serve"
+  },
+  "devDependencies": {
+    "serve-the-source": "github:cycle-five/serve-the-source"
+  }
+}

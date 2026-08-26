@@ -5,3 +5,6 @@
 # OS / editor cruft
 .DS_Store
 *.swp
+
+# npm — serve-the-source is a build-time dependency
+node_modules/
