@@ -8,8 +8,11 @@ Cloudflare Pages. Replaces the previous Backdrop CMS site at `cyclefive.xyz`.
 
 - **Zola 0.22.1** — static site generator (Tera templates + built-in libsass).
 - No external theme. Custom templates in `templates/`, custom styles in `sass/`.
-- No JS framework, no build step beyond `zola build`. Fonts: Inter + JetBrains
-  Mono via Google Fonts (with system fallbacks).
+- No JS framework. The build is `zola build` plus
+  [serve-the-source](https://github.com/cycle-five/serve-the-source), which
+  writes each page's Markdown source beside its HTML for agents (`npm run build`
+  runs both). Fonts: Inter + JetBrains Mono via Google Fonts (with system
+  fallbacks).
 
 ## Layout
 
@@ -32,6 +35,9 @@ Cloudflare Pages. Replaces the previous Backdrop CMS site at `cyclefive.xyz`.
 │   └── img/
 │       ├── crack-tunes.jpg  # Crack Tunes logo (from old site)
 │       └── anya-og.png      # Anya AI image (from old site, also the OG image)
+├── functions/
+│   └── _middleware.js     # Pages Function: Accept: text/markdown → index.md
+├── package.json           # `npm run build` = zola build + serve-the-source
 ├── .claude/launch.json    # Local dev-server config (zola serve on :1111)
 ├── .gitignore             # ignores public/ and .zola-cache/
 ├── LICENSE                # MIT
@@ -58,7 +64,8 @@ Requires Zola **0.22.1** (`brew install zola` / `pacman -S zola` /
 
 ```sh
 zola serve     # live-reload dev server at http://127.0.0.1:1111
-zola build     # production build into ./public
+zola build     # HTML only, into ./public
+npm run build  # what Pages runs: zola build, then the Markdown for agents
 zola check     # validate internal links & markup
 ```
 
@@ -67,12 +74,19 @@ zola check     # validate internal links & markup
 Connect this repo to Cloudflare Pages (Workers & Pages → Create → Pages →
 Connect to Git) with:
 
-| Setting             | Value        |
-| ------------------- | ------------ |
-| Framework preset    | None         |
-| Build command       | `zola build` |
-| Build output dir    | `public`     |
-| Root directory      | `/`          |
+| Setting             | Value           |
+| ------------------- | --------------- |
+| Framework preset    | None            |
+| Build command       | `npm run build` |
+| Build output dir    | `public`        |
+| Root directory      | `/`             |
+
+**The build command must be `npm run build`, not `zola build`.** Plain
+`zola build` deploys a site that looks fine, but it writes no `index.md` files,
+so `functions/_middleware.js` has nothing to serve and agents asking for
+`text/markdown` silently get HTML. Check after a deploy:
+`curl -sI -H 'Accept: text/markdown' https://cyclefive.xyz/about/` should say
+`content-type: text/markdown`.
 
 **Pin the Zola version** — Cloudflare's default Zola is older. Add an
 environment variable (Settings → Environment variables, Production **and**
