@@ -325,6 +325,12 @@ img { max-width: 100%; height: auto; display: block; }
 .prose th { color: var(--ink); font-weight: 600; }
 .prose td { color: var(--ink-soft); }
 .prose td code, .prose th code { white-space: nowrap; }
+// Tables whose cells are sentences, not values: let them wrap.
+.prose .table-wrap--prose th, .prose .table-wrap--prose td { white-space: normal; vertical-align: top; padding: .45rem .5rem; }
+.prose .table-wrap--prose td:first-child { min-width: 8rem; }
+// GFM task lists: the checkbox is the marker, so drop the bullet.
+.prose li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.4rem; padding-left: 1.4rem; text-indent: -1.4rem; }
+.prose li > input[type="checkbox"] { width: .9rem; margin: 0 .5rem 0 0; text-indent: 0; }
 .prose figure { margin: 1.6rem 0; }
 .prose figure svg { display: block; width: 100%; height: auto; }
 .prose figcaption { color: var(--muted); font-size: .85rem; margin-top: .5rem; }
