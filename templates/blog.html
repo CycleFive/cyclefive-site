@@ -19,7 +19,8 @@
           <h2 class="post-list__title"><a href="{{ page.permalink | safe }}">{{ page.title }}</a></h2>
           <p class="post-meta">
             <time datetime="{{ page.date }}">{{ page.date | date(format="%B %e, %Y") }}</time>
-            {%- if page.reading_time %} · {{ page.reading_time }} min read{% endif %}
+            {%- if page.extra.pdf %} · PDF{% if page.extra.pdf_pages %}, {{ page.extra.pdf_pages }} pages{% endif %}
+            {%- elif page.reading_time %} · {{ page.reading_time }} min read{% endif %}
           </p>
           {% if page.description %}<p>{{ page.description }}</p>{% endif %}
         </article>
