@@ -288,6 +288,8 @@ img { max-width: 100%; height: auto; display: block; }
 .post-list__item:last-child { border-bottom: 0; }
 .post-list__title { font-size: 1.35rem; margin: 0 0 .25rem; }
 .post-meta { color: var(--muted); font-size: .9rem; margin: 0 0 .6rem; }
+// Document pages (templates/document.html): the PDF and source buttons.
+.doc-actions { display: flex; flex-wrap: wrap; gap: .8rem; margin: 1.6rem 0 0; }
 
 // Prose extensions for long-form posts. The base .prose rules only cover
 // p/strong; posts bring headings, code, tables, quotes, and figures.

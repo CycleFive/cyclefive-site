@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{#-
+  Document pages: the PDF is the document, and this page is its landing card.
+  The Markdown body is deliberately NOT rendered here. It is the source that
+  serve-the-source mirrors to index.md beside this page, which
+  functions/_middleware.js hands to agents asking for text/markdown and the
+  "Markdown source" button links to directly. Keep the PDF next to index.md
+  (a Zola page bundle) and name it in [extra] pdf.
+-#}
+
+{% block title %}{{ page.title }} · {{ config.title }}{% endblock title %}
+{% block description %}{% if page.description %}{{ page.description }}{% else %}{{ config.description }}{% endif %}{% endblock description %}
+{% block og_title %}{{ page.title }}{% endblock og_title %}
+{% block og_description %}{% if page.description %}{{ page.description }}{% else %}{{ config.description }}{% endif %}{% endblock og_description %}
+
+{% block content %}
+<article class="section">
+  <div class="container prose post">
+    <header class="page-header">
+      <h1 class="page-header__title">{{ page.title }}</h1>
+      {% if page.extra.lead %}
+      <p class="page-header__lead">{{ page.extra.lead }}</p>
+      {% endif %}
+      <p class="post-meta">
+        <time datetime="{{ page.date }}">{{ page.date | date(format="%B %e, %Y") }}</time>
+        {%- if page.extra.pdf_pages %} · PDF, {{ page.extra.pdf_pages }} pages{% endif %}
+      </p>
+    </header>
+    {% if page.description %}<p>{{ page.description }}</p>{% endif %}
+    <p class="doc-actions">
+      <a class="btn btn--primary" href="{{ page.extra.pdf | safe }}" type="application/pdf">Read the PDF</a>
+      <a class="btn btn--ghost" href="index.md" type="text/markdown">Markdown source</a>
+    </p>
+    <footer class="post-footer">
+      <p><a href="/blog/">← All posts</a></p>
+    </footer>
+  </div>
+</article>
+{% endblock content %}

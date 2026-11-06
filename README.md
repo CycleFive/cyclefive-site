@@ -27,6 +27,7 @@ Cloudflare Pages. Replaces the previous Backdrop CMS site at `cyclefive.xyz`.
 │   ├── base.html          # Shell: header, nav, footer, <head>, skip-link
 │   ├── index.html         # Home: hero + products + community
 │   ├── page.html          # Generic prose page (About)
+│   ├── document.html      # PDF-first page: PDF + Markdown source buttons, body not rendered
 │   └── contact.html       # Contact page with email + community cards
 ├── sass/
 │   └── main.scss          # Design system → compiled to /main.css
