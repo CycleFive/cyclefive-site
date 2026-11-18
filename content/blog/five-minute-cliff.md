@@ -14,7 +14,7 @@ Enter mutants. I had first become aware of mutation testing years ago and honest
 
 So a major testing framework overhaul was immediately followed by a *giant* refactor, to detangle the core module and finally achieve the dream of highly effective, robust, all-encompassing testing *and* faster builds.
 
-Rather than write up what happened myself, I had Claude work it out. What follows is Claude's.
+Rather than getting all the details from Claude and weaving in my own prose where I could, what follows is entirely Claude. This is a way that I've found to be effective and useful in writing these posts, intro, motivation, and perspective from me at the top, and then the model in its own words with the details.
 
 I ran the CrackTunes agent loop through all of this, and I have the transcripts. Switching from hand-broken tests to cargo-mutants cost more tokens, not fewer, and the reason had almost nothing to do with mutation testing. A subagent's prompt cache expires after five idle minutes, and the loop made agents sit awake through 30 to 80 minute jobs, waking every few minutes to ask whether cargo had finished. The tool found real bugs. The operating model around it, which I was running, was wrong.
 
