@@ -36,7 +36,7 @@ For one layer with a d×d weight matrix stored at b bits per weight and a batch 
 I = \frac{2d^2 B}{d^2 b / 8} = \frac{16B}{b}\ \text{FLOP/byte}
 ```
 
-An H100 SXM has about 989 dense BF16 TFLOPS against 3.35 TB/s of HBM, a ridge point near 295 FLOP/byte. Single-stream decode (B = 1, b = 16) sits at 1 FLOP/byte, two orders of magnitude below the ridge, so it is purely bandwidth-bound: tokens/s ≈ bandwidth ÷ bytes of active weights. Weight-only 4-bit quantization helps decode a lot even with no 4-bit math units. Prefill and training run B in the thousands, are compute-bound, and only speed up when the tensor cores run the narrow type.
+An H100 SXM has about 989 dense BF16 TFLOPS against 3.35 TB/s of HBM, a ridge point near 295 FLOP/byte. Single-stream decode (B = 1, b = 16) sits at 1 FLOP/byte, two orders of magnitude below the ridge, so it is purely bandwidth-bound: tokens/s ≈ bandwidth ÷ bytes of active weights. Weight-only 4-bit quantization helps decode a lot even with no 4-bit math units. Prefill and training run B in the thousands, are compute-bound, and only speed up when the matmul itself runs in a narrower native type (FP8, FP4, or INT8 after a W4A8 unpack).
 
 ### What gets quantized
 
@@ -194,7 +194,7 @@ These stack. A modern recipe might rotate, then smooth, then GPTQ the weights on
 
 ## 5. Software schemes vs native formats
 
-Most quantized checkpoints you download are not a hardware number format. They are packed integer (or codebook) indices plus per-block scales, and a kernel unpacks them to FP16/BF16 or INT8 in registers right before the matmul. They win on bandwidth-bound decode and lose nothing on hardware support, but they never use FP4/FP8 math units. The exceptions are FP8, MXFP4/NVFP4 checkpoints (gpt-oss, NVIDIA's ModelOpt exports), which do map onto tensor cores.
+Most quantized checkpoints you download are not a hardware number format. They are packed integer (or codebook) indices plus per-block scales, and a kernel unpacks them to FP16/BF16 or INT8 in registers right before the matmul. They win wherever weight traffic dominates (decode and small-batch serving) and lose nothing on hardware support, but they never use FP4/FP8 math units. The exceptions are FP8, MXFP4/NVFP4 checkpoints (gpt-oss, NVIDIA's ModelOpt exports), which do map onto tensor cores.
 
 | Scheme | What is stored | Bits/weight | Calibration | Native silicon? |
 | --- | --- | --- | --- | --- |
@@ -217,7 +217,7 @@ Details worth knowing:
 - **HQQ** is calibration-free and fast (Llama-2-70B in under 5 minutes) with quality close to GPTQ/AWQ at 4 bits ([HQQ](https://mobiusml.github.io/hqq_blog/)).
 - **MXFP4 in the wild.** OpenAI's gpt-oss shipped its MoE weights (over 90% of parameters) in MXFP4 at 4.25 bits, letting the 117B-parameter model fit on one 80 GB GPU ([model card](https://arxiv.org/abs/2508.10925)). llama.cpp added a native MXFP4 GGUF type for it.
 
-The practical difference: a native format speeds up prefill and large-batch serving (compute-bound) because the tensor core consumes it directly. A software format speeds up only memory-bound decode and costs some ALU work to unpack; at large batch, unpacking can make it slower than plain FP8.
+The practical difference: a native format speeds up prefill and large-batch serving (compute-bound) because the tensor core consumes it directly. A weight-only software format (W4A16) speeds up any matmul where weight traffic dominates, not just single-stream decode. On the H100 roofline from section 1, 4-bit weights keep BF16 math bandwidth-bound up to B ≈ 74 and still beat BF16 weights below B ≈ 295; Marlin measures close to the ideal 4× on an A10 up to batch 16–32, falling toward 1.5× at 128 as the matmul turns compute-bound. While bandwidth-bound, dequantization overlaps the weight loads; once compute-bound it competes with the MMAs for issue slots, and lookup-table codes (NF4, i-quants) cost more than affine INT4. Past B ≈ 150, FP8 W8A8 overtakes W4A16 on H100, mostly because it runs the tensor cores at twice the BF16 rate, not because of unpacking (QServe's roofline puts the same crossover near 78 against INT8 W8A8 on A100). The exception is a software weight format that unpacks into a native narrow type: QServe's W4A8 dequantizes 4-bit weights to INT8 and runs every GEMM on INT8 tensor cores, and llama.cpp's CPU kernels dot packed weights against Q8-quantized activations with integer SIMD, so both do speed up compute-bound work.
 
 ## 6. What it does to model behavior
 
@@ -347,13 +347,13 @@ Sources: [A100](https://developer.nvidia.com/blog/nvidia-ampere-architecture-in-
 From section 1, a decode step at batch B with b-bit weights has intensity of about 16B/b FLOP/byte, while the ridge point of these chips is in the hundreds (H100: about 295 for BF16, about 590 for FP8).
 
 - **Single-stream decode** is bandwidth-bound. An upper bound is tokens/s ≈ memory bandwidth ÷ bytes of active weights. A 70B dense model at about 4.5 bpw (about 39 GB) on an H100 caps near 3,350 / 39 ≈ 85 tokens/s, against about 24 tokens/s for the same model in BF16 if it fit. Software 4-bit formats capture nearly all of this without native FP4.
-- **Prefill, large-batch serving and training** are compute-bound. Only native formats help, which is why FP8 serving and FP8/FP4 training need tensor-core support while llama.cpp-style quants run well on any GPU or CPU.
+- **Prefill, large-batch serving and training** are compute-bound. Only a narrower native math type helps (FP8/FP4, or INT8 after a W4A8 unpack), which is why FP8 serving and FP8/FP4 training need tensor-core support while llama.cpp-style quants run well on any GPU or CPU.
 - **MoE models** shift the balance: only active experts are read per token (gpt-oss-120b activates about 5.1B of 117B parameters), so decode is cheaper, but the full weights must still fit, which makes capacity the binding constraint and 4-bit weights especially attractive.
 - **KV cache reads** grow with context and batch and are bandwidth-bound too, which is why FP8 and NVFP4 KV caches pay off directly in long-context throughput.
 
 ## 8. What to pick
 
-Match the format to the bottleneck: software 4-bit for bandwidth-bound local decode, native FP8 or FP4 for compute-bound serving and training.
+Match the format to the bottleneck: software 4-bit for bandwidth-bound decode and small-batch serving, native FP8 or FP4 for compute-bound serving and training.
 
 | Situation | Weights | Activations / KV | Why |
 | --- | --- | --- | --- |
@@ -388,7 +388,7 @@ Methods and quality
 
 - [LLM.int8()](https://arxiv.org/abs/2208.07339) and [Dettmers on emergent features](https://timdettmers.com/2022/08/17/llm-int8-and-emergent-features/)
 - [SmoothQuant](https://arxiv.org/abs/2211.10438) and [repo](https://github.com/mit-han-lab/smoothquant)
-- [GPTQ](https://arxiv.org/abs/2210.17323), [AWQ](https://arxiv.org/abs/2306.00978), [QuaRot](https://arxiv.org/abs/2404.00456), [SpinQuant](https://arxiv.org/abs/2405.16406), [QuIP#](https://arxiv.org/abs/2402.04396), [QTIP](https://arxiv.org/abs/2406.11235), [QServe](https://arxiv.org/abs/2405.04532)
+- [GPTQ](https://arxiv.org/abs/2210.17323), [AWQ](https://arxiv.org/abs/2306.00978), [QuaRot](https://arxiv.org/abs/2404.00456), [SpinQuant](https://arxiv.org/abs/2405.16406), [QuIP#](https://arxiv.org/abs/2402.04396), [QTIP](https://arxiv.org/abs/2406.11235), [QServe](https://arxiv.org/abs/2405.04532), [Marlin](https://arxiv.org/abs/2408.11743)
 - [QLoRA / NF4](https://arxiv.org/abs/2305.14314), [HQQ](https://mobiusml.github.io/hqq_blog/), [ExLlamaV3 / EXL3](https://github.com/turboderp-org/exllamav3)
 - [llama.cpp perplexity scoreboard](https://github.com/ggml-org/llama.cpp/blob/master/tools/perplexity/README.md), [quantize README](https://github.com/ggml-org/llama.cpp/blob/master/tools/quantize/README.md), [i-quants PR #4773](https://github.com/ggml-org/llama.cpp/pull/4773)
 - [Give Me BF16 or Give Me Death?](https://arxiv.org/abs/2411.02355)
